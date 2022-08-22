@@ -13,7 +13,7 @@ namespace DBContext
         }
         private void AddDefaultQuestion()
         {
-            Questions.Add(new Question("1 + 2 = ?", 1, new List<string>() { "2", "3", "12", "32" }));
+            Questions.Add(new Question("1 + 2 = ?", 1, new List<string>() { "21", "2", "12", "32" }));
             Questions.Add(new Question("1 * 2 = ?", 2, new List<string>() { "21", "34", "2", "32" }));
             Questions.Add(new Question("4 / 2 = ?", 0, new List<string>() { "2", "13", "12", "32" }));
         }

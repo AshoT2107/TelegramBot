@@ -10,6 +10,16 @@ Bot.GetUpdate((_, update, _) => GetUpdate(update));
 Console.ReadKey();
 async Task GetUpdate(Update update)
 {
+    if (update.Type == UpdateType.CallbackQuery)
+    {
+        var msgId = update.CallbackQuery.Message.MessageId;
+        var ChatID = update.CallbackQuery.Message.Chat.Id;
+        var data = update.CallbackQuery.Data.Split(',').Select(int.Parse).ToList();
+        var (question, answer) = CheckAnswer(data[0], data[1]);
+        Bot.EditMessage(ChatID, msgId, $"{question}: {answer}");
+        SendQuestion(ChatID, data[0] + 1);
+    }
+
     if (update.Type != UpdateType.Message) return;
     var chatId = update.Message!.Chat.Id;//id =2
     var message = update.Message!.Text!;//salom
@@ -19,8 +29,8 @@ async Task GetUpdate(Update update)
     {
         case 0: ShowMenu(user); break;
         case 1: SwitchTextMessage(user, message); break;
-        case 2: AddQuestion(user,message); break;
-        case 5: SwitchUsersMenu(user,message);break;
+        case 2: AddQuestion(user, message); break;
+        case 5: SwitchUsersMenu(user, message); break;
     }
 }
 
@@ -68,19 +78,19 @@ void SwitchTextMessage(UserEntity user, string buttonText)
 {
     switch (buttonText)
     {
-        case "StartQuiz" : SendQuestionMessage(user);break;
+        case "StartQuiz": QuestionMessage(user); break;
         case "AddQuestion": ShowAddQuestion(user); break;
-        case "Dashboard" : ShowDashboard(user); break;
-        case "Users" : ShowUsersMenu(user);break;
+        case "Dashboard": ShowDashboard(user); break;
+        case "Users": ShowUsersMenu(user); break;
     }
 }
-void SwitchUsersMenu(UserEntity user,string buttonText)
+void SwitchUsersMenu(UserEntity user, string buttonText)
 {
-    switch(buttonText)
+    switch (buttonText)
     {
         case "Show": ShowUsers(user); break;
         case "Clear": ClearUsers(user); break;
-        default:ShowUsersMenu(user);break;
+        default: ShowUsersMenu(user); break;
     }
 }
 
@@ -112,15 +122,15 @@ void AddQuestion(UserEntity user, string message)
 void ShowDashboard(UserEntity user)
 {
     string message = $"Savollar soni: {db.questionsDb.Questions.Count} ta\n";
-    for(int i=0;i<db.questionsDb.Questions.Count;i++)
+    for (int i = 0; i < db.questionsDb.Questions.Count; i++)
     {
-        message += $"{i+1}. {db.questionsDb.GetQuestion(i).QuestionText}\n";
+        message += $"{i + 1}. {db.questionsDb.GetQuestion(i).QuestionText}\n";
     }
-    var newButton = new ReplyKeyboardMarkup(new[]{new KeyboardButton("Menu")})
+    var newButton = new ReplyKeyboardMarkup(new[] { new KeyboardButton("Menu") })
     {
         ResizeKeyboard = true
     };
-    Bot.SendMessage(user.ChatId,message,newButton);
+    Bot.SendMessage(user.ChatId, message, newButton);
 }
 
 void ShowUsersMenu(UserEntity user)
@@ -138,48 +148,67 @@ void ShowUsersMenu(UserEntity user)
         ResizeKeyboard = true
     };
     user.SetStep(5);
-    Bot.SendMessage(user.ChatId,"Menuni tanlang👇",newButtons);
+    Bot.SendMessage(user.ChatId, "Menuni tanlang👇", newButtons);
 }
 
 void ShowUsers(UserEntity user)
 {
     string message = $"Botdan foydalanayotgan Userlar soni: {db.usersDb.Users.Count} ta\n";
     message += db.usersDb.GetUsersText();
-    Bot.SendMessage(user.ChatId,message);
+    Bot.SendMessage(user.ChatId, message);
 }
 
 void ClearUsers(UserEntity user)
 {
     db.usersDb.Users.Clear();
-    var newUser = db.usersDb.AddUser(user.ChatId,user.Name);
+    var newUser = db.usersDb.AddUser(user.ChatId, user.Name);
     newUser.SetStep(5);
-    Bot.SendMessage(user.ChatId,"Userlar tozalandi");
+    Bot.SendMessage(user.ChatId, "Userlar tozalandi");
 }
 
-Tuple<string,InlineKeyboardMarkup> ShowStartQuiz(UserEntity user,int index)
+Tuple<string, InlineKeyboardMarkup> ShowStartQuiz(int index)
 {
-        var question = db.questionsDb.GetQuestion(index);
-        var choicesText = db.questionsDb.GetQuestion(index).Choices;
-        return new(question.QuestionText,GetInlineButtons(choicesText));
-    
+    var question = db.questionsDb.GetQuestion(index);
+    var choicesText = db.questionsDb.GetQuestion(index).Choices;
+    return new(question.QuestionText, GetInlineButtons(choicesText, index));
 }
 
-InlineKeyboardMarkup GetInlineButtons(List<string> buttonTexts,int? questionIndex = null)
+InlineKeyboardMarkup GetInlineButtons(List<string> buttonsText, int? questionIndex = null)
 {
-    var buttons = new InlineKeyboardButton[buttonTexts.Count][];
-    for(int i=0;i<buttonTexts.Count;i++)
+    var buttons = new InlineKeyboardButton[buttonsText.Count][];
+
+    for (int i = 0; i < buttons.Length; i++)
     {
-        var callBackData = questionIndex == null? null : questionIndex+",";
-        buttons[i]= new[]
-        {
-            InlineKeyboardButton.WithCallbackData(buttonTexts[i],$"{callBackData}{i}")
-        };
+        var callBackData = questionIndex == null ? null : questionIndex + ",";
+        buttons[i] = new[] { InlineKeyboardButton.WithCallbackData(text: buttonsText[i], callbackData: $"{callBackData}{i}") };
     }
+
     return new InlineKeyboardMarkup(buttons);
 }
 
-void SendQuestionMessage(UserEntity user)
+void QuestionMessage(UserEntity user)
 {
-    var (message,buttons) = ShowStartQuiz(user,1);
-    Bot.SendMessage(user.ChatId,message,buttons);
+    var (message, buttons) = ShowStartQuiz(0);
+    Bot.SendMessage(user.ChatId, message, buttons);
+}
+
+Tuple<string, bool> CheckAnswer(int questionIndex, int choicesIndex)
+{
+    var question = db.questionsDb.Questions[questionIndex];
+    if (question.CorrectAnswerIndex == choicesIndex) return new Tuple<string, bool>(question.QuestionText, true);
+    return new Tuple<string, bool>(question.QuestionText, false);
+}
+
+void SendQuestion(long chatId, int questionIndex)
+{
+    if (db.questionsDb.Questions.Count != questionIndex)
+    {
+        var (message, buttons) = ShowStartQuiz(questionIndex);
+        Bot.SendMessage(chatId, message, buttons);
+    }
+    else
+    {
+        Bot.SendMessage(chatId, "Rahmat,Savollar tugadi👌",
+                new ReplyKeyboardMarkup(new[] { new KeyboardButton("Menu") }){ResizeKeyboard= true});
+    }
 }
