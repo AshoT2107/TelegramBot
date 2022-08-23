@@ -12,12 +12,17 @@ async Task GetUpdate(Update update)
 {
     if (update.Type == UpdateType.CallbackQuery)
     {
-        var msgId = update.CallbackQuery.Message.MessageId;
-        var ChatID = update.CallbackQuery.Message.Chat.Id;
+        var messageId = update.CallbackQuery.Message.MessageId;
+        var chatIdOfCallBack = update.CallbackQuery.Message.Chat.Id;
+        var replyButton = update.CallbackQuery.Message.ReplyMarkup;
+        
         var data = update.CallbackQuery.Data.Split(',').Select(int.Parse).ToList();
-        var (question, answer) = CheckAnswer(data[0], data[1]);
-        Bot.EditMessage(ChatID, msgId, $"{question}: {answer}");
-        SendQuestion(ChatID, data[0] + 1);
+        
+        var (questionText, givenAnswer) = CheckAnswerOfQuestion(questionIndex: data[0],choicesIndex: data[1]);
+        
+        //Bot.EditMessage(chatIdOfCallBack, messageId, $"{questionText}: {givenAnswer}");
+        Bot.EditMessageReplyMarkup(chatIdOfCallBack,messageId,SetIconToButtons(replyButton,data[1],givenAnswer));
+        SendNextQuestion(chatIdOfCallBack, data[0] + 1);
     }
 
     if (update.Type != UpdateType.Message) return;
@@ -78,12 +83,13 @@ void SwitchTextMessage(UserEntity user, string buttonText)
 {
     switch (buttonText)
     {
-        case "StartQuiz": QuestionMessage(user); break;
+        case "StartQuiz": SendQuestionMessageWithButtons(user); break;
         case "AddQuestion": ShowAddQuestion(user); break;
         case "Dashboard": ShowDashboard(user); break;
         case "Users": ShowUsersMenu(user); break;
     }
 }
+
 void SwitchUsersMenu(UserEntity user, string buttonText)
 {
     switch (buttonText)
@@ -166,44 +172,45 @@ void ClearUsers(UserEntity user)
     Bot.SendMessage(user.ChatId, "Userlar tozalandi");
 }
 
-Tuple<string, InlineKeyboardMarkup> ShowStartQuiz(int index)
-{
-    var question = db.questionsDb.GetQuestion(index);
-    var choicesText = db.questionsDb.GetQuestion(index).Choices;
-    return new(question.QuestionText, GetInlineButtons(choicesText, index));
-}
-
 InlineKeyboardMarkup GetInlineButtons(List<string> buttonsText, int? questionIndex = null)
 {
     var buttons = new InlineKeyboardButton[buttonsText.Count][];
 
+    var callBackData = questionIndex == null ? null : questionIndex + ",";
+    
     for (int i = 0; i < buttons.Length; i++)
     {
-        var callBackData = questionIndex == null ? null : questionIndex + ",";
         buttons[i] = new[] { InlineKeyboardButton.WithCallbackData(text: buttonsText[i], callbackData: $"{callBackData}{i}") };
     }
 
     return new InlineKeyboardMarkup(buttons);
 }
 
-void QuestionMessage(UserEntity user)
+Tuple<string, InlineKeyboardMarkup> ShowQuestionWithChoices(int questionIndex)
 {
-    var (message, buttons) = ShowStartQuiz(0);
+    var question = db.questionsDb.GetQuestion(questionIndex);
+    var choices = db.questionsDb.GetQuestion(questionIndex).Choices;
+    return new(question.QuestionText, GetInlineButtons(choices, questionIndex));
+}
+
+void SendQuestionMessageWithButtons(UserEntity user)
+{
+    var (message, buttons) = ShowQuestionWithChoices(0);
     Bot.SendMessage(user.ChatId, message, buttons);
 }
 
-Tuple<string, bool> CheckAnswer(int questionIndex, int choicesIndex)
+Tuple<string, bool> CheckAnswerOfQuestion(int questionIndex, int choicesIndex)
 {
     var question = db.questionsDb.Questions[questionIndex];
     if (question.CorrectAnswerIndex == choicesIndex) return new Tuple<string, bool>(question.QuestionText, true);
     return new Tuple<string, bool>(question.QuestionText, false);
 }
 
-void SendQuestion(long chatId, int questionIndex)
+void SendNextQuestion(long chatId, int questionIndex)
 {
     if (db.questionsDb.Questions.Count != questionIndex)
     {
-        var (message, buttons) = ShowStartQuiz(questionIndex);
+        var (message, buttons) = ShowQuestionWithChoices(questionIndex);
         Bot.SendMessage(chatId, message, buttons);
     }
     else
@@ -211,4 +218,11 @@ void SendQuestion(long chatId, int questionIndex)
         Bot.SendMessage(chatId, "Rahmat,Savollar tugadi👌",
                 new ReplyKeyboardMarkup(new[] { new KeyboardButton("Menu") }){ResizeKeyboard= true});
     }
+}
+
+InlineKeyboardMarkup SetIconToButtons(InlineKeyboardMarkup buttons,int choiceIndex,bool answer)
+{
+    var buttonsList = buttons.InlineKeyboard.ToList();
+    buttonsList[choiceIndex].ToList()[0].Text += answer ? " ✅" : " ❌";
+    return buttons;
 }

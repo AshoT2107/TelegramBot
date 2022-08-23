@@ -25,9 +25,14 @@ class TelegramBotService
     {
         Bot.SendTextMessageAsync(chatId, message, replyMarkup: reply);
     }
-    public void EditMessage(long chatId, int messageId,string text)
+    public void EditMessage(long chatId, int messageId, string text)
     {
-        Bot.EditMessageTextAsync(chatId:chatId,messageId,text);
+        Bot.EditMessageTextAsync(chatId: chatId, messageId, text);
+    }
+
+    public void EditMessageReplyMarkup(long chatId, int messageId, InlineKeyboardMarkup? reply)
+    {
+        Bot.EditMessageReplyMarkupAsync(chatId: chatId, messageId: messageId, replyMarkup: reply);
     }
 
 }
